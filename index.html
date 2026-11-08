@@ -46,7 +46,7 @@ function generate(sp){let g=sp.genome,nodes=new Map(g.nodes.map(n=>[n.id,n])),pa
  let triangles=[],lines=[];
  // Clip every above-ground triangle against the invisible horizontal plane y=0.
  // This includes thick stems, curved leaves, flowers and bulbs.
- function face(a,b,c,h,s,l,alpha=1){
+ function face(a,b,c,h,s,l,alpha=1,gradient=null){
   const vertices=[a,b,c],clipped=[];
   for(let i=0;i<3;i++){
     const current=vertices[i],previous=vertices[(i+2)%3];
@@ -59,20 +59,24 @@ function generate(sp){let g=sp.genome,nodes=new Map(g.nodes.map(n=>[n.id,n])),pa
   }
   for(let i=1;i+1<clipped.length;i++){
     const a=clipped[0],b=clipped[i],c=clipped[i+1];
-    triangles.push({pts:[a,b,c],h,s,l,alpha,normal:norm(cross(sub(b,a),sub(c,a)))});
+    triangles.push({pts:[a,b,c],h,s,l,alpha,gradient,normal:norm(cross(sub(b,a),sub(c,a)))});
   }
  }
- function band(p,steps,sides,startR,endR){let direction=p.dir,[u,w]=frame(direction),rings=[];for(let i=0;i<=steps;i++){let t=i/steps;let center=add(add(p.pos,mul(direction,p.len*t)),mul(u,Math.sin(t*PI)*p.curve*p.len*.12));let radius=mix(startR,endR,t);let ring=[];for(let j=0;j<sides;j++){let a=TAU*j/sides,rad=add(mul(u,Math.cos(a)),mul(w,Math.sin(a)));ring.push(add(center,mul(rad,radius)));}rings.push(ring);if(i)for(let j=0;j<sides;j++){let k=(j+1)%sides,prev=rings[i-1],curr=rings[i];face(prev[j],prev[k],curr[k],g.palette.hue,.75,.38);face(prev[j],curr[k],curr[j],g.palette.hue,.75,.38);}}}
+ function band(p,steps,sides,startR,endR){let direction=p.dir,[u,w]=frame(direction),rings=[];for(let i=0;i<=steps;i++){let t=i/steps;let center=add(add(p.pos,mul(direction,p.len*t)),mul(u,Math.sin(t*PI)*p.curve*p.len*.12));let radius=mix(startR,endR,t);let ring=[];for(let j=0;j<sides;j++){let a=TAU*j/sides,rad=add(mul(u,Math.cos(a)),mul(w,Math.sin(a)));ring.push(add(center,mul(rad,radius)));}rings.push(ring);if(i)for(let j=0;j<sides;j++){let k=(j+1)%sides,prev=rings[i-1],curr=rings[i];const stemGradient={from:p.pos,to:add(p.pos,mul(p.dir,p.len)),colors:[[g.palette.hue,.76,.23],[g.palette.hue+g.palette.offset*.33,.9,.43],[g.palette.hue+g.palette.offset*.6,.97,.61]]};
+ face(prev[j],prev[k],curr[k],g.palette.hue,.75,.38,1,stemGradient);face(prev[j],curr[k],curr[j],g.palette.hue,.75,.38,1,stemGradient);}}}
  for(const p of parts){if(p.type==='axis'){band(p,5,7,p.width*.22,p.width*.035);lines.push([p.pos,add(p.pos,mul(p.dir,p.len)),'axis']);continue;}
  let [u,w]=frame(p.dir),h=g.palette.hue,r=rng(hash(sp.seed,p.path,123)),localHue=h+between(r,-g.variation.color,g.variation.color);
  if(p.type==='leaf'){
- let strips=9,edge=[];for(let i=0;i<=strips;i++){let t=i/strips,sin=Math.pow(Math.sin(PI*t),.72),wid=p.width*sin*(1+.14*Math.sin(t*TAU*p.lobes*.35)*p.waves);let center=add(add(p.pos,mul(p.dir,p.len*t)),add(mul(u,p.curve*p.len*.12*Math.sin(PI*t)),mul(w,p.twist*p.len*.1*t*t)));let twist=rotateAround(u,p.dir,p.twist*t*1.3);edge.push([add(center,mul(twist,wid)),sub(center,mul(twist,wid))]);if(i){let a=edge[i-1],b=edge[i];face(a[0],a[1],b[1],localHue,.88,.45+sin*.12);face(a[0],b[1],b[0],localHue,.88,.45+sin*.12);}}lines.push([p.pos,add(p.pos,mul(p.dir,p.len)),'leaf']);
+ let strips=9,edge=[];for(let i=0;i<=strips;i++){let t=i/strips,sin=Math.pow(Math.sin(PI*t),.72),wid=p.width*sin*(1+.14*Math.sin(t*TAU*p.lobes*.35)*p.waves);let center=add(add(p.pos,mul(p.dir,p.len*t)),add(mul(u,p.curve*p.len*.12*Math.sin(PI*t)),mul(w,p.twist*p.len*.1*t*t)));let twist=rotateAround(u,p.dir,p.twist*t*1.3);edge.push([add(center,mul(twist,wid)),sub(center,mul(twist,wid))]);if(i){let a=edge[i-1],b=edge[i];const leafGradient={from:p.pos,to:add(p.pos,mul(p.dir,p.len)),colors:[[localHue,.91,.25],[localHue+g.palette.offset*.3,.96,.47],[localHue+g.palette.offset,.98,.73]]};
+ face(a[0],a[1],b[1],localHue,.88,.45+sin*.12,1,leafGradient);face(a[0],b[1],b[0],localHue,.88,.45+sin*.12,1,leafGradient);}}lines.push([p.pos,add(p.pos,mul(p.dir,p.len)),'leaf']);
  }else if(p.type==='flower'){
- const n=p.lobes,plen=p.len*.62;let base=add(p.pos,mul(p.dir,p.len*.08));for(let j=0;j<n;j++){let a=j*TAU/n,pv=add(mul(u,Math.cos(a)),mul(w,Math.sin(a))),ort=norm(cross(pv,p.dir));let rings=[];for(let k=0;k<=6;k++){let t=k/6,center=add(add(base,mul(pv,plen*t)),mul(p.dir,plen*(.25*Math.sin(t*PI)+p.curve*.1*t)));let ww=p.width*.42*Math.sin(t*PI);rings.push([add(center,mul(ort,ww)),sub(center,mul(ort,ww))]);if(k){let x=rings[k-1],y=rings[k];face(x[0],x[1],y[1],localHue+g.palette.offset*(j%3)/3,.95,.53+t*.12);face(x[0],y[1],y[0],localHue+g.palette.offset*(j%3)/3,.95,.53+t*.12);}}}
+ const n=p.lobes,plen=p.len*.62;let base=add(p.pos,mul(p.dir,p.len*.08));for(let j=0;j<n;j++){let a=j*TAU/n,pv=add(mul(u,Math.cos(a)),mul(w,Math.sin(a))),ort=norm(cross(pv,p.dir));let rings=[];for(let k=0;k<=6;k++){let t=k/6,center=add(add(base,mul(pv,plen*t)),mul(p.dir,plen*(.25*Math.sin(t*PI)+p.curve*.1*t)));let ww=p.width*.42*Math.sin(t*PI);rings.push([add(center,mul(ort,ww)),sub(center,mul(ort,ww))]);if(k){let x=rings[k-1],y=rings[k];const petalGradient={from:base,to:add(base,mul(pv,plen)),colors:[[localHue,.94,.29],[localHue+g.palette.offset*.36,.99,.57],[localHue+g.palette.offset,.97,.79]]};
+ face(x[0],x[1],y[1],localHue+g.palette.offset*(j%3)/3,.95,.53+t*.12,1,petalGradient);face(x[0],y[1],y[0],localHue+g.palette.offset*(j%3)/3,.95,.53+t*.12,1,petalGradient);}}}
  sphere(base,p.width*.24,g.palette.accent,.9,.7,5,8);
  }else if(p.type==='bulb')sphere(add(p.pos,mul(p.dir,p.len*.47)),p.width*.88,localHue,.9,.48,8,12,p.dir,p.len/Math.max(.01,p.width)*.36);
  }
- function sphere(c,r,h,s,l,rows=7,cols=10,dir=V(0,1,0),elong=1){const [u,w]=frame(dir);let rings=[];for(let i=0;i<=rows;i++){const phi=PI*i/rows,ring=[];for(let j=0;j<cols;j++){const a=j*TAU/cols;ring.push(add(c,add(mul(dir,r*elong*Math.cos(phi)),add(mul(u,r*Math.sin(phi)*Math.cos(a)),mul(w,r*Math.sin(phi)*Math.sin(a))))));}rings.push(ring);if(i)for(let j=0;j<cols;j++){let k=(j+1)%cols,A=rings[i-1],B=rings[i];face(A[j],A[k],B[k],h,s,l);face(A[j],B[k],B[j],h,s,l);}}}
+ function sphere(c,r,h,s,l,rows=7,cols=10,dir=V(0,1,0),elong=1){const [u,w]=frame(dir);let rings=[];for(let i=0;i<=rows;i++){const phi=PI*i/rows,ring=[];for(let j=0;j<cols;j++){const a=j*TAU/cols;ring.push(add(c,add(mul(dir,r*elong*Math.cos(phi)),add(mul(u,r*Math.sin(phi)*Math.cos(a)),mul(w,r*Math.sin(phi)*Math.sin(a))))));}rings.push(ring);if(i)for(let j=0;j<cols;j++){let k=(j+1)%cols,A=rings[i-1],B=rings[i];const bulbGradient={from:add(c,mul(dir,-r*elong)),to:add(c,mul(dir,r*elong)),colors:[[h,.88,.27],[h+g.palette.offset*.34,.95,.56],[h+g.palette.offset*.7,.98,.79]]};
+ face(A[j],A[k],B[k],h,s,l,1,bulbGradient);face(A[j],B[k],B[j],h,s,l,1,bulbGradient);}}}
  // Some surfaces can be double-sided: the software renderer colors them without culling.
  const vertices=triangles.flatMap(t=>t.pts),xs=vertices.map(v=>v[0]),ys=vertices.map(v=>v[1]),zs=vertices.map(v=>v[2]);let bounds={min:V(Math.min(...xs),Math.min(...ys),Math.min(...zs)),max:V(Math.max(...xs),Math.max(...ys),Math.max(...zs))};return {parts,triangles,lines,bounds};
 }
@@ -81,7 +85,15 @@ const camera={yaw:.55,pitch:.18},state={a:null,b:null,c:null,gallery:[],mode:'so
 function draw(canvas,sp,mode=state.mode,yaw=camera.yaw,pitch=camera.pitch){if(!sp.cache)sp.cache=generate(sp);let mesh=sp.cache,ctx=canvas.getContext('2d');if(!ctx)return;let W=canvas.width,H=canvas.height;ctx.clearRect(0,0,W,H);let bg=ctx.createRadialGradient(W*.5,H*.55,10,W*.5,H*.55,H*.75);bg.addColorStop(0,'#193441');bg.addColorStop(1,'#081321');ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
  const box=mesh.bounds,center=mul(add(box.min,box.max),.5),radius=Math.max(2,Math.hypot(...sub(box.max,box.min))*.57);let cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),spit=Math.sin(pitch);function transform(p){p=sub(p,center);let x=p[0]*cy-p[2]*sy,z=p[0]*sy+p[2]*cy;return[x,p[1]*cp-z*spit,p[1]*spit+z*cp];}let scale=Math.min(W,H)*.40/radius;function project(p){let t=transform(p);let perspective=1/(1+t[2]/(radius*5));return[W*.5+t[0]*scale*perspective,H*.51-t[1]*scale*perspective,t[2]];}
  if(mode==='skeleton'){for(const line of mesh.lines){let a=project(line[0]),b=project(line[1]);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.lineWidth=line[2]==='axis'?3:1.5;ctx.strokeStyle=line[2]==='axis'?'#68e9d8':'#f7a5da';ctx.stroke();}for(const p of mesh.parts){let a=project(p.pos);ctx.fillStyle=p.type==='axis'?'#2dd4bf':p.type==='leaf'?'#a4fbb0':p.type==='bulb'?'#ffd184':'#ff91ec';ctx.beginPath();ctx.arc(a[0],a[1],p.type==='axis'?3:2,0,TAU);ctx.fill();}}
- else{let tris=mesh.triangles.map(t=>{let pp=t.pts.map(project);return {pts:pp,z:(pp[0][2]+pp[1][2]+pp[2][2])/3,src:t};});tris.sort((a,b)=>b.z-a.z);for(const t of tris){let p=t.pts,src=t.src,n=transform(add(src.normal,center)),light=.62+.38*Math.abs(dot(norm(n),norm(V(-.5,.75,1))));ctx.beginPath();ctx.moveTo(p[0][0],p[0][1]);ctx.lineTo(p[1][0],p[1][1]);ctx.lineTo(p[2][0],p[2][1]);ctx.closePath();ctx.fillStyle=hue(src.h,src.s,clamp(src.l*light,.14,.85));ctx.fill();}}
+ else{let tris=mesh.triangles.map(t=>{let pp=t.pts.map(project);return {pts:pp,z:(pp[0][2]+pp[1][2]+pp[2][2])/3,src:t};});tris.sort((a,b)=>b.z-a.z);for(const t of tris){let p=t.pts,src=t.src,n=transform(add(src.normal,center)),light=.62+.38*Math.abs(dot(norm(n),norm(V(-.5,.75,1))));ctx.beginPath();ctx.moveTo(p[0][0],p[0][1]);ctx.lineTo(p[1][0],p[1][1]);ctx.lineTo(p[2][0],p[2][1]);ctx.closePath();if(src.gradient){
+  const a=project(src.gradient.from),b=project(src.gradient.to);
+  if(Math.hypot(a[0]-b[0],a[1]-b[1])>.01){
+    const gradient=ctx.createLinearGradient(a[0],a[1],b[0],b[1]);
+    src.gradient.colors.forEach((col,i)=>gradient.addColorStop(i/(src.gradient.colors.length-1),hue(col[0],col[1],clamp(col[2]*light,.13,.9))));
+    ctx.fillStyle=gradient;
+  }else ctx.fillStyle=hue(src.h,src.s,clamp(src.l*light,.14,.85));
+ }else ctx.fillStyle=hue(src.h,src.s,clamp(src.l*light,.14,.85));
+ ctx.fill();}}
  return {parts:mesh.parts.length,faces:mesh.triangles.length};}
 function refreshOne(k){const sp=state[k],info=draw($(k),sp);$(k+'id').textContent='#'+sp.id;$(k+'stats').textContent=info.parts+' structures · '+info.faces+' 3D triangles · seed '+sp.seed;}
 function inspect(){let sp=state[state.inspect];$('detail').textContent='Specimen #'+sp.id+' · '+sp.cache.parts.length+' structures · growth in XYZ coordinates';$('json').textContent=JSON.stringify(sp.genome,null,2);}
